@@ -13,14 +13,15 @@ import (
 )
 
 type Exchange struct {
-	Usdbrl Usdbrl `json:"USDBRL"`
+	ID     int    `gorm:"primaryKey"`
+	Usdbrl Usdbrl `json:"USDBRL" gorm:"embedded"`
 }
+
 type CurrentExchangeValue struct {
 	Bid string `json:"bid"`
 }
 
 type Usdbrl struct {
-	ID         int    `gorm:"primaryKey;"`
 	Code       string `json:"code"`
 	Codein     string `json:"codein"`
 	Name       string `json:"name"`
@@ -34,10 +35,29 @@ type Usdbrl struct {
 	CreateDate string `json:"create_date"`
 }
 
+var db *gorm.DB
+
 func main() {
-	log.Printf("Server Init -> Started at port :8080")
+	var err error
+
+	log.Printf("Starting Database connection")
+	db, err = gorm.Open(sqlite.Open("exchange.db"), &gorm.Config{})
+	if err != nil {
+		log.Println("Failed to connect to database:", err)
+		return
+	}
+
+	db.AutoMigrate(&Exchange{})
+	log.Printf("Database connected successfully")
+
+	log.Printf("Initializing HTTP server")
 	http.HandleFunc("/cotacao", ExchangeHandler)
-	http.ListenAndServe(":8080", nil)
+	log.Printf("Server Init -> Started at port :8080")
+	err = http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Println("Failed to start HTTP server:", err)
+		return
+	}
 }
 
 func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
@@ -67,67 +87,52 @@ func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func fetchExchange(ctx context.Context) (*Exchange, error) {
-	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
 	defer cancel()
-	select {
-	case <-ctx.Done():
-		log.Println("Request cancelled or timed out")
-		return nil, ctx.Err()
-	default:
-		log.Printf("Fetching exchange rate from external API")
-		req, err := http.NewRequestWithContext(ctx, "GET", "http://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
-		if err != nil {
-			log.Println("Error creating request:", err)
-			return nil, err
-		}
 
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Println("Error making request:", err)
-			return nil, err
-		}
-		defer res.Body.Close()
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			log.Println("Error reading response body:", err)
-			return nil, err
-		}
-
-		var exchange Exchange
-		err = json.Unmarshal(body, &exchange)
-		if err != nil {
-			log.Println("Error unmarshaling JSON:", err)
-			return nil, err
-		}
-
-		log.Printf("Exchange Rate: %+v\n", exchange.Usdbrl)
-		return &exchange, nil
+	log.Printf("Fetching exchange rate from external API")
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
+	if err != nil {
+		log.Println("Error creating request:", err)
+		return nil, err
 	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println("Error making request:", err)
+		return nil, err
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Println("Error reading response body:", err)
+		return nil, err
+	}
+
+	var exchange Exchange
+	err = json.Unmarshal(body, &exchange)
+	if err != nil {
+		log.Println("Error unmarshaling JSON:", err)
+		return nil, err
+	}
+
+	log.Printf("Exchange Rate: %+v\n", exchange.Usdbrl)
+	return &exchange, nil
 
 }
 
 func saveExchangeRate(ctx context.Context, exchange *Exchange) (*Exchange, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
-	select {
-	case <-ctx.Done():
-		log.Println("Save operation cancelled or timed out")
-		return nil, ctx.Err()
-	default:
-		log.Printf("Persisting exchange rate: %+v\n", exchange)
-		db, err := gorm.Open(sqlite.Open("exchange.db"), &gorm.Config{})
-		if err != nil {
-			log.Println("Failed to connect to database:", err)
-			return nil, err
-		}
-		db.AutoMigrate(&Usdbrl{})
-		err = db.Create(&exchange.Usdbrl).Error
-		if err != nil {
-			log.Println("Failed to save exchange rate:", err)
-			return nil, err
-		}
-		log.Printf("Exchange rate saved successfully: %+v\n", exchange)
 
-		return exchange, nil
+	log.Printf("Persisting exchange rate: %+v\n", exchange)
+
+	err := db.WithContext(ctx).Create(&exchange).Error
+	if err != nil {
+		log.Println("Failed to save exchange rate:", err)
+		return nil, err
 	}
+	log.Printf("Exchange rate saved successfully: %+v\n", exchange)
+
+	return exchange, nil
 }
