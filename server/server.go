@@ -64,7 +64,7 @@ func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	log.Printf("Handling /cotacao request")
-	exchange, err := fetchExchange(ctx)
+	exchange, err := getExchange(ctx)
 	if err != nil {
 		http.Error(w, "Failed to fetch exchange rate", http.StatusInternalServerError)
 		return
@@ -86,25 +86,35 @@ func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(exchangeRate)
 }
 
-func fetchExchange(ctx context.Context) (*Exchange, error) {
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+func getExchange(ctx context.Context) (*Exchange, error) {
+	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 
 	log.Printf("Fetching exchange rate from external API")
-	req, err := http.NewRequestWithContext(ctx, "GET", "http://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Println("API request timeout exceeded (200ms)")
+		}
 		log.Println("Error creating request:", err)
 		return nil, err
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Println("API request timeout exceeded (200ms)")
+		}
 		log.Println("Error making request:", err)
 		return nil, err
 	}
 	defer res.Body.Close()
+
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Println("API request timeout exceeded (200ms)")
+		}
 		log.Println("Error reading response body:", err)
 		return nil, err
 	}
@@ -112,6 +122,9 @@ func fetchExchange(ctx context.Context) (*Exchange, error) {
 	var exchange Exchange
 	err = json.Unmarshal(body, &exchange)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Println("API request timeout exceeded (200ms)")
+		}
 		log.Println("Error unmarshaling JSON:", err)
 		return nil, err
 	}
@@ -122,13 +135,16 @@ func fetchExchange(ctx context.Context) (*Exchange, error) {
 }
 
 func saveExchangeRate(ctx context.Context, exchange *Exchange) (*Exchange, error) {
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 	defer cancel()
 
 	log.Printf("Persisting exchange rate: %+v\n", exchange)
 
 	err := db.WithContext(ctx).Create(&exchange).Error
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Println("Database operation timeout exceeded (10ms)")
+		}
 		log.Println("Failed to save exchange rate:", err)
 		return nil, err
 	}
