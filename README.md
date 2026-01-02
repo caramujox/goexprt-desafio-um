@@ -64,28 +64,34 @@ goexprt-desafio-um/
 ### 🚀 Como Executar
 
 #### 1. Clone o repositório
+
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/caramujox/goexprt-desafio-um.git
 cd goexprt-desafio-um
 ```
 
 #### 2. Instale as dependências
+
 ```bash
 go mod tidy
 ```
 
 #### 3. (Opcional) Suba o ambiente Docker
+
 Se preferir usar Docker para o SQLite:
+
 ```bash
 docker-compose up -d
 ```
 
 #### 4. Execute o servidor (Terminal 1)
+
 ```bash
 go run server/server.go
 ```
 
 Você verá a saída:
+
 ```
 2026/01/02 04:24:46 Starting Database connection
 2026/01/02 04:24:46 Database connected successfully
@@ -94,16 +100,19 @@ Você verá a saída:
 ```
 
 #### 5. Execute o cliente (Terminal 2)
+
 ```bash
 go run client/client.go
 ```
 
 Você verá a saída:
+
 ```
 2026/01/02 04:25:15 Cotacao received: 6.1234
 ```
 
 #### 6. (Se usando Docker) Para parar o ambiente
+
 ```bash
 docker-compose down
 ```
@@ -111,33 +120,37 @@ docker-compose down
 #### 7. Verifique os resultados
 
 **Arquivo cotacao.txt:**
+
 ```
 Dólar: 6.1234
 ```
 
-**Banco de dados:** 
+**Banco de dados:**
+
 - **Local**: As cotações são persistidas no arquivo `exchange.db`
 - **Docker**: As cotações são persistidas no volume `./data/exchange.db`
 
-###  Testando Manualmente
+### Testando Manualmente
 
 #### Teste direto da API do servidor:
+
 ```bash
 curl http://localhost:8080/cotacao
 ```
 
 Resposta esperada:
+
 ```json
-{"bid":"6.1234"}
+{ "bid": "6.1234" }
 ```
 
 ### ⏱️ Configurações de Timeout
 
-| Componente | Timeout | Descrição |
-|------------|---------|-----------|
-| Server → API Externa | 200ms | Busca cotação na API AwesomeAPI |
-| Server → Banco SQLite | 10ms | Persistência no banco de dados |
-| Client → Server | 300ms | Requisição do client ao server |
+| Componente            | Timeout | Descrição                       |
+| --------------------- | ------- | ------------------------------- |
+| Server → API Externa  | 200ms   | Busca cotação na API AwesomeAPI |
+| Server → Banco SQLite | 10ms    | Persistência no banco de dados  |
+| Client → Server       | 300ms   | Requisição do client ao server  |
 
 ### 📊 Logs de Timeout
 
@@ -147,7 +160,7 @@ O sistema registra logs específicos quando timeouts são atingidos:
 # Timeout na API externa (200ms)
 2026/01/02 04:25:15 API request timeout exceeded (200ms)
 
-# Timeout no banco (10ms)  
+# Timeout no banco (10ms)
 2026/01/02 04:25:15 Database operation timeout exceeded (10ms)
 
 # Timeout no client (300ms)
